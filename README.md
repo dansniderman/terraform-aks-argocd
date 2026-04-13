@@ -139,8 +139,47 @@ Populate these outputs into your tfvars values:
 
 After apply, use the cluster outputs to connect with `kubectl`. If you want to expose the Argo CD UI exactly like the tutorial, run a `kubectl expose service` command against the `argocd-server` service after the extension is installed.
 
-## Next Steps
+## Start Here (First Run)
 
-1. Decide whether to keep the root-module layout or extract the AKS resources into `modules/aks`.
-2. Add a sample Argo CD `Application` manifest for the first GitOps deployment.
-3. Add environment-specific federated credentials and role assignments for private registries or other Azure dependencies.
+Use this sequence to begin right away in your shared lab subscription:
+
+1. Run prerequisite bootstrap:
+
+```powershell
+./scripts/bootstrap-azure-prereqs.ps1
+```
+
+2. Create your tfvars from the example:
+
+```powershell
+Copy-Item ./terraform.tfvars.example ./terraform.tfvars
+```
+
+3. Edit `terraform.tfvars` and set real values for:
+	- `subscription_id`
+	- `resource_group_name` (must start with `rg-dps`)
+	- `argocd_workload_identity_client_id`
+	- `argocd_sso_workload_identity_client_id`
+	- `argocd_entra_tenant_id`
+	- `argocd_ui_url`
+	- `argocd_admin_group_object_ids`
+
+4. Validate workload identity inputs:
+
+```powershell
+./scripts/validate-workload-identity-inputs.ps1 -TfvarsPath ./terraform.tfvars
+```
+
+5. Deploy:
+
+```powershell
+terraform init
+terraform plan
+terraform apply
+```
+
+## Updated Next Steps
+
+1. Complete federated credential and role assignment wiring for any private registries or Azure services Argo CD needs to reach.
+2. Expose the Argo CD UI endpoint and verify Entra sign-in and RBAC behavior for admin and optional readonly groups.
+3. Add environment-specific hardening (network controls, tighter RBAC policy, and tag standards) once the learning baseline is working.
