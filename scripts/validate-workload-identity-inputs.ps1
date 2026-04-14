@@ -5,7 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not (Test-Path -Path $TfvarsPath)) {
+$tfvarsExists = Test-Path -Path $TfvarsPath
+if (-not $tfvarsExists) {
     throw "tfvars file not found at path: $TfvarsPath"
 }
 

@@ -11,6 +11,15 @@ This repository is intended for learning, so infrastructure decisions should bia
 - Avoid optional paid services unless they are required for the learning scenario.
 - Include Argo CD as part of the cluster setup because GitOps workflows are part of the target learning path.
 
+## Naming Convention
+
+Because this is a shared lab subscription and shared Entra tenant, use `dps` in names that are shared or externally exposed.
+
+- Required: resource group names should start with `rg-dps`.
+- Recommended: include `dps` in AKS cluster name and DNS prefix.
+- Required for exposed endpoints: include `dps` in URL-facing hostnames such as Argo CD UI URLs.
+- Optional: cluster-local names that are not externally exposed can omit `dps`.
+
 ## Layout
 
 - `.github/copilot-instructions.md`: workspace-wide Copilot guidance for this repo
@@ -71,11 +80,11 @@ The following Azure CLI sequence creates two managed identities, fetches the AKS
 ```powershell
 # Set environment values
 $RESOURCE_GROUP = "rg-dps-aks-dev"
-$CLUSTER_NAME = "aks-dev-01"
+$CLUSTER_NAME = "aks-dps-dev-01"
 $LOCATION = "eastus"
 $WI_RESOURCE_GROUP = "rg-dps-identity-dev"
-$WORKLOAD_MI_NAME = "mi-argocd-workload"
-$SSO_MI_NAME = "mi-argocd-sso"
+$WORKLOAD_MI_NAME = "mi-dps-argocd-workload"
+$SSO_MI_NAME = "mi-dps-argocd-sso"
 
 # Create a resource group for identities (or reuse an existing one)
 az group create --name $WI_RESOURCE_GROUP --location $LOCATION
@@ -158,10 +167,12 @@ Copy-Item ./terraform.tfvars.example ./terraform.tfvars
 3. Edit `terraform.tfvars` and set real values for:
 	- `subscription_id`
 	- `resource_group_name` (must start with `rg-dps`)
+	- `aks_cluster_name` (include `dps`)
+	- `dns_prefix` (include `dps`)
 	- `argocd_workload_identity_client_id`
 	- `argocd_sso_workload_identity_client_id`
 	- `argocd_entra_tenant_id`
-	- `argocd_ui_url`
+	- `argocd_ui_url` (include `dps` in hostname)
 	- `argocd_admin_group_object_ids`
 
 4. Validate workload identity inputs:

@@ -9,7 +9,6 @@ crash.*.log
 # Local variable files
 *.auto.tfvars
 *.auto.tfvars.json
-terraform.tfvars
 terraform.tfvars.json
 
 # Editor
