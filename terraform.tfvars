@@ -18,7 +18,7 @@ argocd_sso_workload_identity_client_id = "59fff1a2-7038-476c-9879-3504a88a1b7b"
 argocd_entra_tenant_id             = "ed9aa516-5358-4016-a8b2-b6ccb99142d0"
 argocd_ui_url                      = "https://argocd-dps.example.com"
 argocd_default_policy              = "role:readonly"
-argocd_admin_group_object_ids      = ["00000000-0000-0000-0000-000000000000"]
+argocd_admin_group_object_ids      = ["3e454e85-1a9b-4c42-96fe-cf65b5cda4d0"]
 argocd_readonly_group_object_ids   = []
 
 tags = {
