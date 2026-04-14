@@ -25,6 +25,7 @@ Because this is a shared lab subscription and shared Entra tenant, use `dps` in 
 - `.github/copilot-instructions.md`: workspace-wide Copilot guidance for this repo
 - `.github/prompts/`: reusable prompt files available from Copilot Chat with `/`
 - `scripts/bootstrap-azure-prereqs.ps1`: local prerequisite bootstrap for Azure CLI, providers, and extensions
+- `scripts/setup-workload-identity.ps1`: creates managed identities and federated credentials for Argo CD workload identity
 - `scripts/validate-workload-identity-inputs.ps1`: pre-apply validator for workload identity placeholders in tfvars
 - `modules/aks/`: reusable AKS module for cluster and Argo CD extension
   - `main.tf`: AKS cluster and extension resources
@@ -75,45 +76,22 @@ For Windows PowerShell, you can run [scripts/bootstrap-azure-prereqs.ps1](script
 
 ## Create Workload Identity Prereqs
 
-The following Azure CLI sequence creates two managed identities, fetches the AKS OIDC issuer, and creates federated credentials for Argo CD service accounts.
+Run [scripts/setup-workload-identity.ps1](scripts/setup-workload-identity.ps1) to create the managed identities and (after cluster creation) the federated credentials.
+
+The script runs in two phases automatically:
+- **Phase 1** (before `terraform apply`): creates the managed identities and prints the client IDs to copy into `terraform.tfvars`.
+- **Phase 2** (after `terraform apply`): re-run the same script to create federated credentials using the cluster OIDC issuer. If the cluster does not exist yet it skips phase 2 and tells you to re-run.
+
+No secrets are created. Workload identity uses OIDC tokens rather than passwords or client secrets.
 
 ```powershell
-# Set environment values
-$RESOURCE_GROUP = "rg-dps-aks-dev"
-$CLUSTER_NAME = "aks-dps-dev-01"
-$LOCATION = "eastus"
-$WI_RESOURCE_GROUP = "rg-dps-identity-dev"
-$WORKLOAD_MI_NAME = "mi-dps-argocd-workload"
-$SSO_MI_NAME = "mi-dps-argocd-sso"
-
-# Create a resource group for identities (or reuse an existing one)
-az group create --name $WI_RESOURCE_GROUP --location $LOCATION
-
-# Create managed identities
-az identity create --resource-group $WI_RESOURCE_GROUP --name $WORKLOAD_MI_NAME
-az identity create --resource-group $WI_RESOURCE_GROUP --name $SSO_MI_NAME
-
-# Capture client IDs
-$WORKLOAD_CLIENT_ID = az identity show --resource-group $WI_RESOURCE_GROUP --name $WORKLOAD_MI_NAME --query clientId --output tsv
-$SSO_CLIENT_ID = az identity show --resource-group $WI_RESOURCE_GROUP --name $SSO_MI_NAME --query clientId --output tsv
-
-# Get AKS OIDC issuer URL
-$OIDC_ISSUER = az aks show --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --query oidcIssuerProfile.issuerUrl --output tsv
-
-# Create federated credentials for Argo CD service accounts
-az identity federated-credential create --resource-group $WI_RESOURCE_GROUP --identity-name $WORKLOAD_MI_NAME --name fic-argocd-repo-server --issuer $OIDC_ISSUER --subject system:serviceaccount:argocd:argocd-repo-server --audiences api://AzureADTokenExchange
-az identity federated-credential create --resource-group $WI_RESOURCE_GROUP --identity-name $WORKLOAD_MI_NAME --name fic-argocd-app-controller --issuer $OIDC_ISSUER --subject system:serviceaccount:argocd:argocd-application-controller --audiences api://AzureADTokenExchange
-az identity federated-credential create --resource-group $WI_RESOURCE_GROUP --identity-name $SSO_MI_NAME --name fic-argocd-server --issuer $OIDC_ISSUER --subject system:serviceaccount:argocd:argocd-server --audiences api://AzureADTokenExchange
-
-# Example role assignment for pulling from ACR
-# Replace <acr-resource-id> with your ACR resource ID
-az role assignment create --assignee-object-id $(az identity show --resource-group $WI_RESOURCE_GROUP --name $WORKLOAD_MI_NAME --query principalId -o tsv) --role AcrPull --scope <acr-resource-id>
+./scripts/setup-workload-identity.ps1 `
+  -ResourceGroup "rg-dps-aks-dev" `
+  -ClusterName   "aks-dps-dev-01" `
+  -Location      "eastus"
 ```
 
-Populate these outputs into your tfvars values:
-
-- `argocd_workload_identity_client_id = $WORKLOAD_CLIENT_ID`
-- `argocd_sso_workload_identity_client_id = $SSO_CLIENT_ID`
+The script will print the values to paste into `terraform.tfvars`.
 
 ## What Terraform Creates
 
@@ -169,13 +147,22 @@ Copy-Item ./terraform.tfvars.example ./terraform.tfvars
 	- `resource_group_name` (must start with `rg-dps`)
 	- `aks_cluster_name` (include `dps`)
 	- `dns_prefix` (include `dps`)
-	- `argocd_workload_identity_client_id`
-	- `argocd_sso_workload_identity_client_id`
 	- `argocd_entra_tenant_id`
 	- `argocd_ui_url` (include `dps` in hostname)
 	- `argocd_admin_group_object_ids`
 
-4. Validate workload identity inputs:
+4. Run the workload identity setup script (Phase 1) to create managed identities and get the client IDs:
+
+```powershell
+./scripts/setup-workload-identity.ps1 `
+  -ResourceGroup "rg-dps-aks-dev" `
+  -ClusterName   "aks-dps-dev-01" `
+  -Location      "eastus"
+```
+
+Copy the printed `argocd_workload_identity_client_id` and `argocd_sso_workload_identity_client_id` values into `terraform.tfvars`.
+
+5. Validate workload identity inputs:
 
 ```powershell
 ./scripts/validate-workload-identity-inputs.ps1 -TfvarsPath ./terraform.tfvars
@@ -191,6 +178,7 @@ terraform apply
 
 ## Updated Next Steps
 
-1. Complete federated credential and role assignment wiring for any private registries or Azure services Argo CD needs to reach.
+1. Re-run `./scripts/setup-workload-identity.ps1` (Phase 2) to create federated credentials now that the cluster exists.
 2. Expose the Argo CD UI endpoint and verify Entra sign-in and RBAC behavior for admin and optional readonly groups.
-3. Add environment-specific hardening (network controls, tighter RBAC policy, and tag standards) once the learning baseline is working.
+3. Add role assignments for any private registries or Azure services Argo CD needs to reach (for example ACR pull).
+4. Add environment-specific hardening (network controls, tighter RBAC policy, and tag standards) once the learning baseline is working.
